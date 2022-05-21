@@ -2,166 +2,200 @@ package models
 
 import (
 	"errors"
-	"fmt"
+	"strings"
 
+	driver "github.com/arangodb/go-driver"
 	"github.com/beego/beego/v2/client/orm"
+	"github.com/davecgh/go-spew/spew"
 )
 
-type User struct {
-	Uid      string `orm:"pk;size(50)" form:"uid" json:"uid"`
-	Nama     string `orm:"size(128)" form:"nama" json:"nama"`
-	Alamat   string `orm:"size(128)" form:"alamat" json:"alamat"`
-	Email    string `orm:"size(128);unique" form:"email" json:"email"`
-	Password string `orm:"size(128)" form:"password" json:"-"`
-}
+type (
+	UserModel struct {
+		Limit   int
+		Offset  int
+		SortBy  string
+		SortDir string
+	}
+	User struct {
+		ID       string `json:"_id,omitempty"`
+		Key      string `json:"_key,omitempty"`
+		Nama     string `form:"nama" json:"nama"`
+		Alamat   string `form:"alamat" json:"alamat"`
+		Email    string `form:"email" json:"email"`
+		Password string `form:"password" json:"password"`
+	}
+)
 
 func init() {
 	orm.RegisterModel(new(User))
 }
 
-func AddUser(user *User) (string, error) {
-	o := orm.NewOrm()
-	res, err := o.Raw("insert into user (uid,nama,alamat,email,password)values(?,?,?,?,?)", user.Uid, user.Nama, user.Alamat, user.Email, user.Password).Exec()
-	if err != nil {
-		return "", errors.New("failed insert data")
-	}
-	fmt.Println(res.RowsAffected())
+func (m *UserModel) Create(data *User) (interface{}, error) {
+	dbHandler := new(DbHandler)
 
-	// u.Id = "user_" + strconv.FormatInt(time.Now().UnixNano(), 10)
-
-	return user.Uid, nil
+	return dbHandler.SaveDocument("user", data)
 }
 
-func GetUserById(uid string) (v *User, err error) {
-	o := orm.NewOrm()
-	v = &User{Uid: uid}
-	if err = o.QueryTable(new(User)).Filter("uid", uid).RelatedSel().One(v); err == nil {
-		return v, nil
+//====================divide get==================
+func (m *UserModel) GetObject(primaryKey string) (interface{}, error) {
+	if primaryKey == "" {
+		return nil, errors.New("Data id hilang")
 	}
-	return nil, err
+	dbHandler := new(DbHandler)
+
+	return dbHandler.GetObject("user", primaryKey)
 }
 
-func GetAllUser() ([]User, error) {
-
-	var sql string
-	var users []User
-	qb, _ := orm.NewQueryBuilder("mysql")
-	qb.Select("id,nama,alamat").From("user").OrderBy("nama").Asc()
-
-	sql = qb.String()
-
-	o := orm.NewOrm()
-
-	num, err := o.Raw(sql).QueryRows(&users)
-	fmt.Println(num)
-
-	if err != nil {
-		return []User{}, err
+//=================get datatables===================
+func (m *UserModel) GetDatatables(Qtab map[string]interface{}) ([]interface{}, int64, error) {
+	bindVars := make(map[string]interface{})
+	url := Qtab["url"].(map[string]interface{})
+	query := "FOR doc IN user "
+	//FOR doc IN user
+	//LIMIT 0,10
+	var selectStr string
+	for k, v := range Qtab["columns"].([]string) {
+		if k != 0 {
+			selectStr += ","
+		}
+		selectStr += v + ":doc." + v
 	}
+	var whereStr string = "FILTER "
+	var sortStr string = "SORT "
 
-	return users, nil
-	// o := orm.NewOrm()
-	// qs := o.QueryTable(new(User))
-	// // query k=v
-	// for k, v := range query {
-	// 	// rewrite dot-notation to Object__Attribute
-	// 	k = strings.Replace(k, ".", "__", -1)
-	// 	qs = qs.Filter(k, v)
-	// }
-	// // order by:
-	// var sortFields []string
-	// if len(sortby) != 0 {
-	// 	if len(sortby) == len(order) {
-	// 		// 1) for each sort field, there is an associated order
-	// 		for i, v := range sortby {
-	// 			orderby := ""
-	// 			if order[i] == "desc" {
-	// 				orderby = "-" + v
-	// 			} else if order[i] == "asc" {
-	// 				orderby = v
-	// 			} else {
-	// 				return nil, errors.New("Error: Invalid order. Must be either [asc|desc]")
-	// 			}
-	// 			sortFields = append(sortFields, orderby)
-	// 		}
-	// 		qs = qs.OrderBy(sortFields...)
-	// 	} else if len(sortby) != len(order) && len(order) == 1 {
-	// 		// 2) there is exactly one order, all the sorted fields will be sorted by this order
-	// 		for _, v := range sortby {
-	// 			orderby := ""
-	// 			if order[0] == "desc" {
-	// 				orderby = "-" + v
-	// 			} else if order[0] == "asc" {
-	// 				orderby = v
-	// 			} else {
-	// 				return nil, errors.New("Error: Invalid order. Must be either [asc|desc]")
-	// 			}
-	// 			sortFields = append(sortFields, orderby)
-	// 		}
-	// 	} else if len(sortby) != len(order) && len(order) != 1 {
-	// 		return nil, errors.New("Error: 'sortby', 'order' sizes mismatch or 'order' size is not 1")
-	// 	}
-	// } else {
-	// 	if len(order) != 0 {
-	// 		return nil, errors.New("Error: unused 'order' fields")
-	// 	}
-	// }
+	search_len := len(url["search"].(string))
+	colOffset := url["start"].(int)
 
-	// var l []User
-	// qs = qs.OrderBy(sortFields...).RelatedSel()
-	// if _, err = qs.Limit(limit, offset).All(&l, fields...); err == nil {
-	// 	if len(fields) == 0 {
-	// 		for _, v := range l {
-	// 			ml = append(ml, v)
-	// 		}
-	// 	} else {
-	// 		// trim unused fields
-	// 		for _, v := range l {
-	// 			m := make(map[string]interface{})
-	// 			val := reflect.ValueOf(v)
-	// 			for _, fname := range fields {
-	// 				m[fname] = val.FieldByName(fname).Interface()
-	// 			}
-	// 			ml = append(ml, m)
-	// 		}
-	// 	}
-	// 	return ml, nil
-	// }
-	// return nil, err
-}
+	var limit string
+	limit += "LIMIT @offset, @lenght "
+	if search_len > 0 {
+		for k, v := range Qtab["searchfilter"].([]string) {
+			if k != 0 {
+				whereStr += " OR "
+			}
+			whereStr += v + " LIKE " + "\"%" + url["search"].(string) + "%\"" //like
+		}
+		if url["order_dir"] == "asc" {
+			query += whereStr
+			query += sortStr + "doc.nama ASC "
+			query += limit
 
-// UpdateUser updates User by Id and returns error if
-// the record to be updated doesn't exist
-func UpdateUserById(m *User) (User, error) {
-	o := orm.NewOrm()
-	v := User{Uid: m.Uid}
-	// ascertain id exists in the database
-	if err := o.Read(&v); err == nil {
-		var num int64
-		if num, err = o.Update(m); err == nil {
-			fmt.Println("Number of records updated in database:", num)
+		} else {
+			query += whereStr
+			query += sortStr + "doc.nama DESC "
+			query += limit
+		}
+	} else {
+		if url["order_dir"] == "asc" {
+			query += sortStr + "doc.nama ASC "
+			query += limit
+		} else {
+			query += sortStr + "doc.nama DESC "
+			query += limit
 		}
 	}
-	return v, nil
+
+	query += "RETURN {id:doc._id,alamat:doc.alamat,email:doc.email}"
+
+	dbHandler := new(DbHandler)
+	bindVars["offset"] = colOffset
+	bindVars["lenght"] = url["lenght"].(int)
+	dbHandler.BindVars = bindVars
+
+	return dbHandler.GetCollectionByQueryWithCount(query)
 }
 
-func DeleteUser(uid string) (err error) {
-	o := orm.NewOrm()
-	v := User{Uid: uid}
-	if err = o.Read(&v); err == nil {
-		var num int64
-		if num, err = o.Delete(&User{Uid: uid}); err == nil {
-			fmt.Println("Number of records deleted in database:", num)
+//=============get object by params===================
+
+func (m *UserModel) GetObjectByParams(params map[string]interface{}, excludeKey ...string) (interface{}, error) {
+	if params == nil {
+		return nil, errors.New("Data params hilang")
+	}
+	bindVars := make(map[string]interface{})
+	query := "FOR doc IN user"
+	var filters []string
+	if params["email"] != nil && params["email"].(string) != "" {
+		filters = append(filters, "(LIKE(@email, doc.email, true))")
+		bindVars["email"] = params["email"].(string)
+	}
+
+	var andCondition []string
+	if len(excludeKey) > 0 && excludeKey[0] != "" {
+		andCondition = append(andCondition, "@userId != doc._id")
+		bindVars["userId"] = "user/" + excludeKey[0]
+	}
+	if len(filters) > 0 {
+		query += " FILTER " + strings.Join(filters, " OR ")
+		if len(andCondition) > 0 {
+			query += " AND " + strings.Join(andCondition, " AND ")
 		}
 	}
-	return
-}
-func Login(email, password string) (*User, error) {
-	o := orm.NewOrm()
-	v := &User{Email: email}
-	if err := o.QueryTable(new(User)).Filter("email", email).RelatedSel().One(v); err != nil {
-		return &User{}, errors.New("email not found")
+	query += " LIMIT 1 RETURN doc"
+
+	dbHandler := new(DbHandler)
+	dbHandler.BindVars = bindVars
+	obj, err := dbHandler.GetObjectByQuery(query)
+	if driver.IsNoMoreDocuments(err) {
+		return nil, nil
+	} else if err != nil {
+		ZapLogger.Error(err.Error())
+		var strDebug string
+		strDebug = spew.Sdump(query)
+		ZapLogger.Info(`query: ` + strDebug)
+		strDebug = spew.Sdump(bindVars)
+		ZapLogger.Info(`bindVars: ` + strDebug)
+		return nil, err
 	}
 
-	return v, nil
+	return obj, nil
+}
+
+//================divide update=================
+
+func (m *UserModel) Update(primaryKey string, data interface{}) (interface{}, error) {
+	if primaryKey == "" {
+		return nil, errors.New("Data id hilang")
+	}
+	if data == nil {
+		return nil, errors.New("Data hilang")
+	}
+
+	// TODO check controller
+	// data["migration_timestamp"] = MigrationTimestamp()
+
+	user, err := m.GetObject(primaryKey)
+	if err != nil {
+		return nil, err
+	}
+	userMap := user.(map[string]interface{})
+	dataMap := data.(map[string]interface{})
+	for k, v := range dataMap {
+		if k == "_id" || k == "_key" || k == "_rev" {
+			continue
+		}
+		userMap[k] = v
+	}
+	dbHandler := new(DbHandler)
+	saved, err := dbHandler.UpdateObject("user", primaryKey, userMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return saved, nil
+}
+
+func (m *UserModel) Delete(primaryKey string) (interface{}, error) {
+	if primaryKey == "" {
+		return nil, errors.New("primaryKey hilang")
+	}
+
+	dbHandler := new(DbHandler)
+
+	return dbHandler.RemoveObject("user", primaryKey)
+}
+
+func (m *UserModel) Login(email string) (interface{}, error) {
+	dbHandler := new(DbHandler)
+
+	return dbHandler.GetObjectByField("user", "email", email)
 }

@@ -27,19 +27,9 @@ func init() {
 			),
 		),
 		beego.NSBefore(handlers.Jwt),
-		beego.NSNamespace("/object",
-			beego.NSInclude(
-				&controllers.ObjectController{},
-			),
-		),
 		beego.NSNamespace("/user",
 			beego.NSInclude(
 				&controllers.UserController{},
-			),
-		),
-		beego.NSNamespace("/access",
-			beego.NSInclude(
-				&controllers.AccessController{},
 			),
 		),
 	)

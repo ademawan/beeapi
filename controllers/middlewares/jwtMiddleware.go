@@ -1,7 +1,6 @@
 package middlewares
 
 import (
-	"beeapi/models"
 	"context"
 	"errors"
 
@@ -11,13 +10,13 @@ import (
 	"github.com/golang-jwt/jwt"
 )
 
-func GenerateToken(u *models.User) (string, error) {
-	if u.Uid == "" {
+func GenerateToken(u map[string]interface{}) (string, error) {
+	if u["_id"].(string) == "" {
 		return "cannot Generate token", errors.New("id == 0")
 	}
 
 	codes := jwt.MapClaims{
-		"user_uid": u.Uid,
+		"user_uid": u["_id"].(string),
 		// "email":    u.Email,
 		// "password": u.Password,
 		// "roles": u.Roles,
